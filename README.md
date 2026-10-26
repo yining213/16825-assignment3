@@ -3,7 +3,7 @@
 **Name:** Yi-Ning Huang
 **Andrew ID:** yiningh3
 
-Report webpage: http://www.andrew.cmu.edu/course/16-825/projects/yiningh3/proj3/
+Report webpage: http://www.andrew.cmu.edu/course/16-825/projects/yiningh3/proj3/ or https://yining213.github.io/16825-assignment3/
 
 Completed: Q1–Q3, Q4.1 (view dependence), Q4.2 (coarse/fine sampling), Q4.3 (VolSDF), Q5, Q6, Q7.1 (spherical
 harmonics) and Q7.2 (harder scene).
