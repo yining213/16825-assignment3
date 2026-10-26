@@ -20,3 +20,4 @@ GS/data/materials/
 GS/output/
 results/
 nerf/ckpt/
+nerf/images/
