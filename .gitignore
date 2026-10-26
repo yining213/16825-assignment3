@@ -17,3 +17,6 @@ nerf_materials/
 nerf/data/*.png
 nerf/data/*_license.txt
 GS/data/materials/
+GS/output/
+results/
+nerf/ckpt/

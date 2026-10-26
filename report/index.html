@@ -255,8 +255,8 @@
       <table>
         <thead><tr><th>Parameter</th><th>x</th><th>y</th><th>z</th></tr></thead>
         <tbody>
-          <tr><td>Box center</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
-          <tr><td>Side lengths</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+          <tr><td>Box center</td><td>0.25</td><td>0.25</td><td>0.00</td></tr>
+          <tr><td>Side lengths</td><td>2.01</td><td>1.50</td><td>1.50</td></tr>
         </tbody>
       </table>
     </div>
@@ -265,14 +265,20 @@
 
   <div class="subq" id="q2-3">
     <h3>2.3 Visualization</h3>
-    <div class="pending">Pending &mdash; <code>nerf/images/part_2.gif</code></div>
+    <figure>
+      <img src="data/q2_3_part_2.gif" alt="Optimized rainbow-colored box rendered from 20 viewpoints around it" width="256">
+      <figcaption>Optimized box</figcaption>
+    </figure>
   </div>
 </section>
 
 <!-- ============================ 3 ============================ -->
 <section class="q" id="q3">
   <h2>3. Optimizing a Neural Radiance Field (NeRF)</h2>
-  <div class="pending">Pending &mdash; <code>nerf/images/part_3.gif</code></div>
+  <figure>
+    <img src="data/q3_part_3.gif" alt="NeRF rendering of the lego bulldozer from 20 viewpoints around it" width="256">
+    <figcaption>NeRF on the lego bulldozer</figcaption>
+  </figure>
 </section>
 
 <!-- ============================ 4 ============================ -->
@@ -281,19 +287,80 @@
 
   <div class="subq" id="q4-1">
     <h3>4.1 View Dependence</h3>
-    <div class="pending">Pending &mdash; results on the materials scene</div>
+    <div class="row">
+      <figure>
+        <img src="data/q4_1_view_dependence.gif" alt="Materials scene rendered by the view-dependent NeRF from 20 viewpoints" width="256">
+        <figcaption>With view dependence</figcaption>
+      </figure>
+      <figure>
+        <img src="data/q4_1_no_view_dependence.gif" alt="Materials scene rendered by the NeRF without view dependence from 20 viewpoints" width="256">
+        <figcaption>Without view dependence</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <img src="data/q4_1_test_view.png" alt="Held-out test view of the material spheres: ground truth, without view dependence, with view dependence">
+      <figcaption>Test view 107. Left to right: ground truth, without, with view dependence.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Model</th><th>Train PSNR</th><th>Test PSNR</th><th>Train &minus; test</th></tr></thead>
+        <tbody>
+          <tr><td>Without view dependence</td><td>23.38</td><td>23.10</td><td>0.28</td></tr>
+          <tr><td>With view dependence</td><td>24.07</td><td>23.53</td><td>0.54</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prompt"><code>nerf_materials_512.yaml</code>, 512&times;512. PSNR (dB) over 40 training and 40 test views.</p>
     <div class="answer">
       <h4>View dependence vs. generalization</h4>
-      <div class="pending">Pending</div>
+      <p>The encoded ray direction is concatenated to the position feature before the color head; density depends on
+        position only.</p>
+      <p>View dependence adds specular highlights on the glossy spheres and raises test PSNR by 0.43 dB, but training
+        PSNR rises more (0.69 dB), so the train&ndash;test gap grows from 0.28 to 0.54 dB. The extra freedom lets the
+        network explain inconsistencies between training views with view-dependent color instead of better geometry,
+        which overfits the training cameras. A low-frequency direction encoding and a small color head limit this.</p>
     </div>
   </div>
 
   <div class="subq" id="q4-2">
     <h3>4.2 Coarse/Fine Sampling</h3>
-    <div class="pending">Pending &mdash; coarse/fine results</div>
+    <div class="row">
+      <figure>
+        <img src="data/q4_2_without_coarse_fine.gif" alt="Lego bulldozer at 512 by 512 rendered by a single NeRF from 20 viewpoints">
+        <figcaption>Without coarse/fine</figcaption>
+      </figure>
+      <figure>
+        <img src="data/q4_2_with_coarse_fine.gif" alt="Lego bulldozer at 512 by 512 rendered with coarse/fine sampling from 20 viewpoints">
+        <figcaption>With coarse/fine</figcaption>
+      </figure>
+    </div>
+    <figure>
+      <img src="data/q4_2_test_view.png" alt="Held-out lego test view: ground truth, without coarse/fine, with coarse/fine">
+      <figcaption>Test view. Left to right: ground truth, without, with coarse/fine.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Without coarse/fine</th><th>With coarse/fine</th></tr></thead>
+        <tbody>
+          <tr><td>Network evaluations per ray</td><td>128</td><td>64 coarse + 192 fine</td></tr>
+          <tr><td>Parameters</td><td>107k</td><td>215k</td></tr>
+          <tr><td>Test PSNR (dB)</td><td>24.70</td><td>25.29</td></tr>
+          <tr><td>Training step (ms)</td><td>9.7</td><td>17.6</td></tr>
+          <tr><td>Training time (min)</td><td>14.4</td><td>24.9</td></tr>
+          <tr><td>Render one 512&times;512 image (s)</td><td>0.91</td><td>1.84</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prompt">Lego, 512&times;512, 250 epochs, 10 position-encoding frequencies. PSNR over 20 test views; times on
+      one RTX 4090.</p>
     <div class="answer">
       <h4>Speed vs. quality</h4>
-      <div class="pending">Pending</div>
+      <p>The coarse network renders 64 stratified samples; its weights form a pdf along the ray, from which 128 more
+        depths are sampled, and the fine network renders all 192. The loss is coarse MSE + fine MSE.</p>
+      <p><strong>Quality:</strong> test PSNR +0.59 dB and sharper edges, since the fine samples concentrate near
+        surfaces. You can see finer lego details and sharper shadows in the "with coarse/fine" test image.</p>
+      <p><strong>Speed:</strong> twice the network evaluations per ray and two networks, so rendering is
+        2.0&times; and training 1.7&times; slower.</p>
     </div>
   </div>
 
@@ -301,32 +368,63 @@
     <h3>4.3 VolSDF</h3>
     <div class="row">
       <figure>
-        <div class="pending">Pending &mdash; <code>nerf/images/part_4_3_geometry.gif</code></div>
+        <img src="data/q4_3_geometry.gif" alt="Mesh extracted from the learned SDF of the lego bulldozer, from 20 viewpoints" width="256">
         <figcaption>Geometry</figcaption>
       </figure>
       <figure>
-        <div class="pending">Pending &mdash; <code>nerf/images/part_4_3.gif</code></div>
+        <img src="data/q4_3_color.gif" alt="Lego bulldozer rendered by VolSDF from 20 viewpoints" width="256">
         <figcaption>Color</figcaption>
       </figure>
     </div>
+    <p class="prompt"><code>python -m volume_rendering_main --config-name=volsdf_surface renderer.alpha=20</code></p>
     <div class="answer">
       <h4>What \(\alpha\) and \(\beta\) do</h4>
-      <div class="pending">Pending</div>
+      <p>\(\sigma = \alpha\,\Psi_\beta(-d)\), where \(\Psi_\beta\) is the Laplace CDF. \(\alpha\) is the density inside the
+        object (\(\sigma \to \alpha\) for \(d \ll 0\)). \(\beta\) controls how sharply the density rises across the
+        surface: \(\sigma = \alpha/2\) at \(d = 0\) and ramps over about \(\pm 3\beta\). Small \(\beta\) approaches a hard
+        surface; large \(\beta\) gives a fuzzy shell.</p>
     </div>
     <div class="answer">
       <h4>Questions</h4>
       <ol>
-        <li>How does high \(\beta\) bias your learned SDF? What about low \(\beta\)?
-          <div class="pending">Pending</div></li>
-        <li>Would an SDF be easier to train with volume rendering and low \(\beta\) or high \(\beta\)? Why?
-          <div class="pending">Pending</div></li>
-        <li>Would you be more likely to learn an accurate surface with high \(\beta\) or low \(\beta\)? Why?
-          <div class="pending">Pending</div></li>
+        <li><p>How does high \(\beta\) bias your learned SDF? What about low \(\beta\)?</p>
+          <p>High \(\beta\) spreads density over a wide band, so a smooth SDF whose zero level set is off the true surface
+            can still match the images; thin parts vanish (\(\beta = 0.2\) loses the loader arms). Low \(\beta\) ties the
+            zero level set to the visible surface, biasing the SDF toward sharp surfaces.</p></li>
+        <li><p>Would an SDF be easier to train with volume rendering and low \(\beta\) or high \(\beta\)? Why?</p>
+          <p>High \(\beta\): many samples fall in the wide band, so even a wrong SDF gets smooth, non-zero gradients. With
+            low \(\beta\) only samples within a few \(\beta\) of the surface get gradients, and rays can step over it.</p></li>
+        <li><p>Would you be more likely to learn an accurate surface with high \(\beta\) or low \(\beta\)? Why?</p>
+          <p>Low \(\beta\), if the sampling can resolve it: the rendered surface coincides with the zero level set, so
+            fitting the images places it accurately. High \(\beta\) allows a blurry or offset surface.</p></li>
       </ol>
     </div>
+    <figure>
+      <img src="data/q4_3_sweep.png" alt="One frame from each sphere-initialized run: color on top, geometry below">
+      <figcaption>Left to right: \((\alpha, \beta)\) = (10, 0.05), (10, 0.01), (10, 0.2), (20, 0.05). Top: color;
+        bottom: geometry.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Run</th><th>\(\alpha\)</th><th>\(\beta\)</th><th>Test PSNR</th><th>Mesh pieces (% of faces in largest piece)</th></tr></thead>
+        <tbody>
+          <tr><td>Default, no sphere init</td><td>10</td><td>0.05</td><td>21.71</td><td>2,618 (81%)</td></tr>
+          <tr><td>Default</td><td>10</td><td>0.05</td><td>21.28</td><td>1 (100%)</td></tr>
+          <tr><td>Low \(\beta\)</td><td>10</td><td>0.01</td><td>21.54</td><td>3 (99.7%)</td></tr>
+          <tr><td>High \(\beta\)</td><td>10</td><td>0.2</td><td>20.26</td><td>4 (90.5%)</td></tr>
+          <tr><td><strong>Chosen</strong></td><td>20</td><td>0.05</td><td><strong>22.08</strong></td><td>4 (99.7%)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prompt">Test PSNR (dB) over 20 views. Mesh pieces: connected components of the extracted mesh.</p>
     <div class="answer">
       <h4>Chosen settings</h4>
-      <div class="pending">Pending</div>
+      <p><strong>Sphere initialization</strong> (\(d = \text{MLP}(\mathbf{x}) + \lVert\mathbf{x}\rVert - 1\)): without
+        it all of space starts inside the object, so unseen regions become spurious surfaces (2,618 mesh pieces). </p>
+      <p><strong>Low \(\beta\)</strong> (0.05) keeps the thin parts that high \(\beta\) (0.2) loses.</p>
+      <p>
+        <strong>\(\alpha = 20\)</strong> (\(= 1/\beta\), as in VolSDF) makes rays opaque right at the surface and gives
+        the best PSNR.</p>
     </div>
   </div>
 </section>
@@ -336,7 +434,10 @@
 <!-- ============================ 5 ============================ -->
 <section class="q" id="q5">
   <h2>5. 3D Gaussian Rasterization</h2>
-  <div class="pending">Pending &mdash; <code>GS/output/part_5_render.gif</code></div>
+  <figure>
+    <img src="data/q5_part_5_render.gif" alt="Pre-trained chair Gaussians rendered from 32 viewpoints: color, depth and silhouette side by side">
+    <figcaption>Left to right: color, depth, silhouette mask. Command: <code>python render.py</code></figcaption>
+  </figure>
 </section>
 
 <!-- ============================ 6 ============================ -->
@@ -346,25 +447,23 @@
     <table>
       <thead><tr><th>Parameter</th><th>Learning rate</th></tr></thead>
       <tbody>
-        <tr><td>Means</td><td>&mdash;</td></tr>
-        <tr><td>Scales</td><td>&mdash;</td></tr>
-        <tr><td>Colours</td><td>&mdash;</td></tr>
-        <tr><td>Opacities</td><td>&mdash;</td></tr>
+        <tr><td>Means</td><td>0.001</td></tr>
+        <tr><td>Scales</td><td>0.005</td></tr>
+        <tr><td>Colours</td><td>0.0025</td></tr>
+        <tr><td>Opacities</td><td>0.05</td></tr>
       </tbody>
     </table>
   </div>
-  <p class="metric">Iterations: <strong>&mdash;</strong> &middot; PSNR: <strong>&mdash;</strong> &middot;
-    SSIM: <strong>&mdash;</strong></p>
-  <div class="row">
-    <figure>
-      <div class="pending">Pending &mdash; <code>GS/output/part_6_training_progress.gif</code></div>
-      <figcaption>Training progress</figcaption>
-    </figure>
-    <figure>
-      <div class="pending">Pending &mdash; <code>GS/output/part_6_training_final_renders.gif</code></div>
-      <figcaption>Final renders</figcaption>
-    </figure>
-  </div>
+  <p class="metric">Iterations: <strong>1,000</strong> &middot; PSNR: <strong>30.15</strong> &middot;
+    SSIM: <strong>0.944</strong></p>
+  <figure>
+    <img src="data/q6_training_progress.gif" alt="Training progress on four truck views: renders on top, ground truth below">
+    <figcaption>Training progress, one frame every 20 iterations. Top: renders; bottom: ground truth.</figcaption>
+  </figure>
+  <figure>
+    <img src="data/q6_training_final_renders.gif" alt="Final renders of the trained truck Gaussians over all training views" width="320">
+    <figcaption>Final renders of the training views. Command: <code>python train.py</code></figcaption>
+  </figure>
 </section>
 
 <!-- ============================ 7 ============================ -->
@@ -373,27 +472,35 @@
 
   <div class="subq" id="q7-1">
     <h3>7.1 Rendering Using Spherical Harmonics</h3>
-    <div class="row">
-      <figure>
-        <div class="pending">Pending &mdash; <code>GS/output/part_5_render.gif</code> (7.1)</div>
-        <figcaption>With spherical harmonics (7.1)</figcaption>
-      </figure>
-      <figure>
-        <div class="pending">Pending &mdash; <code>GS/output/part_5_render.gif</code> (5.5)</div>
-        <figcaption>Without spherical harmonics (5.5)</figcaption>
-      </figure>
-    </div>
-    <h4 class="example">Comparison 1</h4>
-    <div class="pending">Pending &mdash; same frame, with vs. without spherical harmonics</div>
+    <figure>
+      <img src="data/q7_1_with_sh.gif" alt="Chair Gaussians rendered with spherical harmonics from 32 viewpoints: color, depth and silhouette">
+      <figcaption>With spherical harmonics (7.1). Left to right: color, depth, silhouette mask.</figcaption>
+    </figure>
+    <figure>
+      <img src="data/q5_part_5_render.gif" alt="Chair Gaussians rendered with only the DC color from 32 viewpoints: color, depth and silhouette">
+      <figcaption>Without spherical harmonics, DC color only (5.5).</figcaption>
+    </figure>
+
+    <h4 class="example">Comparison 1 &middot; view 15</h4>
+    <figure>
+      <img src="data/q7_1_cmp_view15.png" alt="View 15 of the chair back: DC color on the left, spherical harmonics on the right">
+      <figcaption>Left: without spherical harmonics. Right: with spherical harmonics.</figcaption>
+    </figure>
     <div class="answer">
       <h4>Differences</h4>
-      <div class="pending">Pending</div>
+      <p>With spherical harmonics the fabric is darker and more saturated, and the gold brocade in the center shows a
+        bright metallic highlight. Without them the backrest is a flat, view-averaged green.</p>
     </div>
-    <h4 class="example">Comparison 2</h4>
-    <div class="pending">Pending &mdash; same frame, with vs. without spherical harmonics</div>
+
+    <h4 class="example">Comparison 2 &middot; view 3</h4>
+    <figure>
+      <img src="data/q7_1_cmp_view03.png" alt="View 3 of the chair from above: DC color on the left, spherical harmonics on the right">
+      <figcaption>Left: without spherical harmonics. Right: with spherical harmonics.</figcaption>
+    </figure>
     <div class="answer">
       <h4>Differences</h4>
-      <div class="pending">Pending</div>
+      <p>From above, the seat shows light and dark variation and the white frame gains shading; without spherical
+        harmonics the chair looks evenly lit and flat. Depth and silhouette are unchanged.</p>
     </div>
   </div>
 
@@ -403,40 +510,49 @@
       <table>
         <thead><tr><th>Parameter</th><th>Learning rate</th></tr></thead>
         <tbody>
-          <tr><td>Means</td><td>&mdash;</td></tr>
-          <tr><td>Scales</td><td>&mdash;</td></tr>
-          <tr><td>Colours</td><td>&mdash;</td></tr>
-          <tr><td>Opacities</td><td>&mdash;</td></tr>
+          <tr><td>Means</td><td>0.005, decayed exponentially to 0.00005</td></tr>
+          <tr><td>Scales</td><td>0.005</td></tr>
+          <tr><td>Colours</td><td>0.0025</td></tr>
+          <tr><td>Opacities</td><td>0.05</td></tr>
+          <tr><td>Quaternions</td><td>0.001</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="metric">Iterations: <strong>&mdash;</strong></p>
+    <p class="metric">Iterations: <strong>3,000</strong> (baseline: 1,000)</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Method</th><th>PSNR</th><th>SSIM</th></tr></thead>
         <tbody>
-          <tr><td>Baseline</td><td>&mdash;</td><td>&mdash;</td></tr>
-          <tr><td>Improved</td><td>&mdash;</td><td>&mdash;</td></tr>
+          <tr><td>Baseline (Q6 setup)</td><td>18.61</td><td>0.692</td></tr>
+          <tr><td>Improved</td><td>23.40</td><td>0.854</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="row">
-      <figure>
-        <div class="pending">Pending &mdash; baseline <code>part_7_2_training_progress.gif</code></div>
-        <figcaption>Baseline training progress</figcaption>
-      </figure>
-      <figure>
-        <div class="pending">Pending &mdash; improved <code>part_7_2_training_progress.gif</code></div>
-        <figcaption>Improved training progress</figcaption>
-      </figure>
-    </div>
     <figure>
-      <div class="pending">Pending &mdash; improved <code>part_7_2_training_final_renders.gif</code></div>
-      <figcaption>Improved final renders</figcaption>
+      <img src="data/q7_2_baseline_progress.gif" alt="Baseline training progress on four materials views: renders on top, ground truth below">
+      <figcaption>Baseline training progress. Top: renders; bottom: ground truth.</figcaption>
+    </figure>
+    <figure>
+      <img src="data/q7_2_improved_progress.gif" alt="Improved training progress on four materials views: renders on top, ground truth below">
+      <figcaption>Improved training progress. Top: renders; bottom: ground truth.</figcaption>
+    </figure>
+    <figure>
+      <img src="data/q7_2_improved_final_renders.gif" alt="Final renders of the improved method over all materials training views" width="256">
+      <figcaption>Improved final renders. Command: <code>python train_harder_scene.py</code> (baseline:
+        <code>--baseline</code>)</figcaption>
     </figure>
     <div class="answer">
       <h4>Modifications</h4>
-      <div class="pending">Pending</div>
+      <ul>
+        <li><strong>Initialization:</strong> the means are spread uniformly over the view (&plusmn;1.3) instead of a ball of
+          radius about 0.5 at the origin, so Gaussians reach the spheres at the edges. They start mostly transparent
+          (opacity 0.1) and small (half the spacing to their neighbours); with near-opaque, larger Gaussians the spread
+          initialization covered the image in fog and failed. This is the main gain.</li>
+        <li><strong>Anisotropic Gaussians:</strong> scales per axis and trainable rotations.</li>
+        <li><strong>Longer training with a means learning-rate schedule:</strong> 3,000 iterations, with the means lr
+          decaying from 0.005 to 0.00005 so the Gaussians first move far, then settle.</li>
+      </ul>
+      <p>The loss (L1) and the other learning rates are the same as Q6.</p>
     </div>
   </div>
 </section>

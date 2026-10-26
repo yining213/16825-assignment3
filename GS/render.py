@@ -29,6 +29,10 @@ def create_renders(args):
         device=args.device
     )
 
+    # Q5.5 renders the DC colour only; without SH coefficients Scene.render uses gaussians.colours
+    if args.no_sh and hasattr(gaussians, "spherical_harmonics"):
+        del gaussians.spherical_harmonics
+
     # Preprocessing for ease of rendering
     new_points = gaussians.means - gaussians.means.mean(dim=0, keepdims=True)
     gaussians.means = new_points
@@ -54,7 +58,10 @@ def create_renders(args):
             # HINT: Set bg_colour to (1.0, 1.0, 1.0)
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: img_size and camera are available above
-            img, depth, mask = None
+            img, depth, mask = scene.render(
+                camera, per_splat=args.gaussians_per_splat,
+                img_size=img_size, bg_colour=(1.0, 1.0, 1.0),
+            )
 
         debug_path = os.path.join(debug_root, f"{i:03d}.png")
         img = img.detach().cpu().numpy()
@@ -106,6 +113,10 @@ def get_args():
             "if more gaussians are splat per function call, but at the cost of higher GPU "
             "memory consumption."
         )
+    )
+    parser.add_argument(
+        "--no_sh", action="store_true",
+        help="Render with the DC colour only (Q5.5) instead of the spherical harmonics (Q7.1)."
     )
     parser.add_argument("--device", default="cuda", type=str, choices=["cuda", "cpu"])
     args = parser.parse_args()

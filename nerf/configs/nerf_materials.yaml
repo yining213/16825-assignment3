@@ -42,4 +42,5 @@ implicit_function:
   density_noise_std: 0.0
   n_layers_xyz: 6
   append_xyz: [3]
+  view_dependence: True
 

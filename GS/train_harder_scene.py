@@ -11,16 +11,25 @@ from torch.utils.data import DataLoader
 from data_utils import visualize_renders
 from data_utils_harder_scene import get_nerf_datasets, trivial_collate
 
+from pytorch3d.ops.knn import knn_points
 from pytorch3d.renderer import PerspectiveCameras
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
+
+# Improved method: the means lr decays exponentially from MEANS_LR to MEANS_LR_FINAL over training
+MEANS_LR, MEANS_LR_FINAL = 0.005, 0.00005
 
 def make_trainable(gaussians):
 
     ### YOUR CODE HERE ###
     # HINT: You can access and modify parameters from gaussians
-    pass
+    gaussians.means.requires_grad_(True)
+    gaussians.pre_act_scales.requires_grad_(True)
+    gaussians.colours.requires_grad_(True)
+    gaussians.pre_act_opacities.requires_grad_(True)
+    if not gaussians.is_isotropic:
+        gaussians.pre_act_quats.requires_grad_(True)
 
-def setup_optimizer(gaussians):
+def setup_optimizer(gaussians, means_lr=0.001):
 
     gaussians.check_if_trainable()
 
@@ -32,14 +41,28 @@ def setup_optimizer(gaussians):
     # HINT: Consider setting different learning rates for different sets of parameters.
     parameters = [
         {'params': [gaussians.pre_act_opacities], 'lr': 0.05, "name": "opacities"},
-        {'params': [gaussians.pre_act_scales], 'lr': 0.05, "name": "scales"},
-        {'params': [gaussians.colours], 'lr': 0.05, "name": "colours"},
-        {'params': [gaussians.means], 'lr': 0.05, "name": "means"},
+        {'params': [gaussians.pre_act_scales], 'lr': 0.005, "name": "scales"},
+        {'params': [gaussians.colours], 'lr': 0.0025, "name": "colours"},
+        {'params': [gaussians.means], 'lr': means_lr, "name": "means"},
     ]
+    if not gaussians.is_isotropic:
+        parameters.append({'params': [gaussians.pre_act_quats], 'lr': 0.001, "name": "quats"})
     optimizer = torch.optim.Adam(parameters, lr=0.0, eps=1e-15)
-    optimizer = None
 
     return optimizer
+
+def spread_initialization(gaussians, extent=1.3, opacity=0.1, scale_mult=0.5):
+    """
+    Improved method: spread the random means uniformly over the view (+-extent) instead of a small
+    ball at the origin, and start them small (half the spacing to their neighbours) and mostly
+    transparent so that they do not cover the image in an opaque fog.
+    """
+    n, device = len(gaussians), gaussians.means.device
+    gaussians.means = (torch.rand((n, 3), device=device) * 2 - 1) * extent
+    dists, _, _ = knn_points(gaussians.means[None], gaussians.means[None], K=4)  # squared, incl. itself
+    scales = torch.log(scale_mult * dists[0, :, 1:].sqrt().mean(dim=1)).unsqueeze(1)
+    gaussians.pre_act_scales = scales if gaussians.is_isotropic else scales.repeat(1, 3)
+    gaussians.pre_act_opacities = torch.logit(torch.full((n,), opacity, device=device))
 
 def ndc_to_screen_camera(camera, img_size = (128, 128)):
 
@@ -58,6 +81,12 @@ def run_training(args):
 
     if not os.path.exists(args.out_path):
         os.makedirs(args.out_path, exist_ok=True)
+    torch.manual_seed(args.seed)
+
+    # Baseline: the Q6 setup (isotropic, constant lrs, 1000 iterations).
+    # Improved: anisotropic, spread initialization, means lr decay, 3000 iterations.
+    num_itrs = args.num_itrs or (1000 if args.baseline else 3000)
+    viz_freq = args.viz_freq or max(num_itrs // 50, 1)
 
     train_dataset, val_dataset, _ = get_nerf_datasets(
         dataset_name="materials", data_root=args.data_path,
@@ -88,17 +117,24 @@ def run_training(args):
     # Init gaussians and scene
     gaussians = Gaussians(
         num_points=10000, init_type="random",
-        device=args.device, isotropic=True
+        device=args.device, isotropic=args.baseline
     )
+    if not args.baseline:
+        spread_initialization(gaussians)
     scene = Scene(gaussians)
 
     # Making gaussians trainable and setting up optimizer
     make_trainable(gaussians)
-    optimizer = setup_optimizer(gaussians)
+    optimizer = setup_optimizer(gaussians, means_lr=0.001 if args.baseline else MEANS_LR)
 
     # Training loop
     viz_frames = []
-    for itr in range(args.num_itrs):
+    for itr in range(num_itrs):
+
+        if not args.baseline:
+            for group in optimizer.param_groups:
+                if group["name"] == "means":
+                    group["lr"] = MEANS_LR * (MEANS_LR_FINAL / MEANS_LR) ** (itr / num_itrs)
 
         # Fetching data
         try:
@@ -117,11 +153,14 @@ def run_training(args):
         # HINT: Set img_size to (128, 128)
         # HINT: Get per_splat from args.gaussians_per_splat
         # HINT: camera is available above
-        pred_img = None
+        pred_img, _, _ = scene.render(
+            camera, per_splat=args.gaussians_per_splat,
+            img_size=(128, 128), bg_colour=(0.0, 0.0, 0.0),
+        )
 
         # Compute loss
         ### YOUR CODE HERE ###
-        loss = None
+        loss = torch.nn.functional.l1_loss(pred_img, gt_img)
 
         loss.backward()
         optimizer.step()
@@ -129,7 +168,7 @@ def run_training(args):
 
         print(f"[*] Itr: {itr:07d} | Loss: {loss:0.3f}")
 
-        if itr % args.viz_freq == 0:
+        if itr % viz_freq == 0:
             viz_frame = visualize_renders(
                 scene, gt_viz_img,
                 viz_cameras, (128, 128)
@@ -160,7 +199,10 @@ def run_training(args):
             # HINT: Set img_size to (128, 128)
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img, _, _ = scene.render(
+                camera, per_splat=args.gaussians_per_splat,
+                img_size=(128, 128), bg_colour=(0.0, 0.0, 0.0),
+            )
 
         pred_npy = pred_img.detach().cpu().numpy()
         pred_npy = (np.clip(pred_npy, 0.0, 1.0) * 255.0).astype(np.uint8)
@@ -186,7 +228,10 @@ def run_training(args):
             # HINT: Set img_size to (128, 128)
             # HINT: Get per_splat from args.gaussians_per_splat
             # HINT: camera is available above
-            pred_img = None
+            pred_img, _, _ = scene.render(
+                camera, per_splat=args.gaussians_per_splat,
+                img_size=(128, 128), bg_colour=(0.0, 0.0, 0.0),
+            )
 
             gt_npy = gt_img.detach().cpu().numpy()
             pred_npy = pred_img.detach().cpu().numpy()
@@ -225,13 +270,18 @@ def get_args():
         )
     )
     parser.add_argument(
-        "--num_itrs", default=1000, type=int,
-        help="Number of iterations to train the model."
+        "--num_itrs", default=None, type=int,
+        help="Number of iterations to train the model (default: 1000 for --baseline, 3000 otherwise)."
     )
     parser.add_argument(
-        "--viz_freq", default=20, type=int,
-        help="Frequency with which visualization should be performed."
+        "--viz_freq", default=None, type=int,
+        help="Frequency with which visualization should be performed (default: 50 frames in total)."
     )
+    parser.add_argument(
+        "--baseline", action="store_true",
+        help="Use the Q6 setup (isotropic, constant learning rates) instead of the improved method."
+    )
+    parser.add_argument("--seed", default=0, type=int)
     parser.add_argument("--device", default="cuda", type=str, choices=["cuda", "cpu"])
     args = parser.parse_args()
     return args

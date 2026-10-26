@@ -10,6 +10,10 @@ from torch.utils.data import Dataset
 from pytorch3d.renderer.cameras import PerspectiveCameras, look_at_view_transform
 
 SH_C0 = 0.28209479177387814
+SH_C1 = 0.4886025119029199
+SH_C2 = [1.0925484305920792, -1.0925484305920792, 0.31539156525252005, -1.0925484305920792, 0.5462742152960396]
+SH_C3 = [-0.5900435899266435, 2.890611442640554, -0.4570457994644658, 0.3731763325901154,
+         -0.4570457994644658, 1.445305721320277, -0.5900435899266435]
 CMAP_JET = plt.get_cmap("jet")
 CMAP_MIN_NORM, CMAP_MAX_NORM = 5.0, 7.0
 
@@ -210,5 +214,19 @@ def colours_from_spherical_harmonics(spherical_harmonics, gaussian_dirs):
                                     RGB colour.
     """
     ### YOUR CODE HERE ###
-    colours = None
+    sh = spherical_harmonics.view(-1, 16, 3)                       # (N, 16 coefficients, RGB)
+    x, y, z = gaussian_dirs[:, 0:1], gaussian_dirs[:, 1:2], gaussian_dirs[:, 2:3]   # (N, 1) each
+    xx, yy, zz = x * x, y * y, z * z
+    xy, yz, xz = x * y, y * z, x * z
+    basis = torch.cat([
+        SH_C0 * torch.ones_like(x),                                                    # degree 0
+        -SH_C1 * y, SH_C1 * z, -SH_C1 * x,                                             # degree 1
+        SH_C2[0] * xy, SH_C2[1] * yz, SH_C2[2] * (2 * zz - xx - yy),
+        SH_C2[3] * xz, SH_C2[4] * (xx - yy),                                           # degree 2
+        SH_C3[0] * y * (3 * xx - yy), SH_C3[1] * xy * z, SH_C3[2] * y * (4 * zz - xx - yy),
+        SH_C3[3] * z * (2 * zz - 3 * xx - 3 * yy), SH_C3[4] * x * (4 * zz - xx - yy),
+        SH_C3[5] * z * (xx - yy), SH_C3[6] * x * (xx - 3 * yy),                       # degree 3
+    ], dim=1)                                                      # (N, 16)
+    colours = (basis[:, :, None] * sh).sum(dim=1) + 0.5            # (N, 3)
+    colours = torch.clamp(colours, min=0.0)
     return colours

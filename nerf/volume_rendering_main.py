@@ -35,7 +35,7 @@ from dataset import (
     get_nerf_datasets,
     trivial_collate,
 )
-from render_functions import render_geometry
+from render_functions import render_geometry, render_points
 
 
 # Model class containing:
@@ -64,7 +64,14 @@ class Model(torch.nn.Module):
         self.renderer = renderer_dict[cfg.renderer.type](
             cfg.renderer
         )
-    
+
+        # Q4.2: a second, fine network for coarse/fine sampling
+        self.implicit_fn_fine = None
+        if cfg.renderer.type == 'volume_coarse_fine':
+            self.implicit_fn_fine = implicit_dict[cfg.implicit_function.type](
+                cfg.implicit_function
+            )
+
     def forward(
         self,
         ray_bundle
@@ -73,9 +80,13 @@ class Model(torch.nn.Module):
         #  a) Implicit volume
         #  b) Sampling routine
 
+        implicit_fn = self.implicit_fn
+        if self.implicit_fn_fine is not None:
+            implicit_fn = (self.implicit_fn, self.implicit_fn_fine)
+
         return self.renderer(
             self.sampler,
-            self.implicit_fn,
+            implicit_fn,
             ray_bundle
         )
 
@@ -100,18 +111,22 @@ def render_images(
 
         # TODO (Q1.3): Visualize xy grid using vis_grid
         if cam_idx == 0 and file_prefix == '':
-            pass
+            plt.imsave('images/grid.png', vis_grid(xy_grid, image_size))
 
         # TODO (Q1.3): Visualize rays using vis_rays
         if cam_idx == 0 and file_prefix == '':
-            pass
-        
+            plt.imsave('images/rays.png', vis_rays(ray_bundle, image_size))
+
         # TODO (Q1.4): Implement point sampling along rays in sampler.py
-        pass
+        ray_bundle = model.sampler(ray_bundle)
 
         # TODO (Q1.4): Visualize sample points as point cloud
         if cam_idx == 0 and file_prefix == '':
-            pass
+            render_points(
+                'images/sample_points.png',
+                ray_bundle.sample_points.reshape(1, -1, 3),
+                device=device,
+            )
 
         # TODO (Q1.5): Implement rendering in renderer.py
         out = model(ray_bundle)
@@ -126,7 +141,12 @@ def render_images(
 
         # TODO (Q1.5): Visualize depth
         if cam_idx == 2 and file_prefix == '':
-            pass
+            depth = np.array(
+                out['depth'].view(
+                    image_size[1], image_size[0]
+                ).detach().cpu()
+            )
+            plt.imsave('images/depth.png', depth / depth.max())
 
         # Save
         if save:
@@ -202,7 +222,7 @@ def train(
             out = model(ray_bundle)
 
             # TODO (Q2.2): Calculate loss
-            loss = None
+            loss = torch.nn.functional.mse_loss(out['feature'], rgb_gt)
 
             # Backprop
             optimizer.zero_grad()
@@ -275,7 +295,7 @@ def create_model(cfg):
         )
 
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda, last_epoch=start_epoch - 1, verbose=False
+        optimizer, lr_lambda, last_epoch=start_epoch - 1
     )
 
     return model, optimizer, lr_scheduler, start_epoch, checkpoint_path
@@ -322,7 +342,10 @@ def train_nerf(
             out = model(ray_bundle)
 
             # TODO (Q3.1): Calculate loss
-            loss = None
+            loss = torch.nn.functional.mse_loss(out['feature'], rgb_gt)
+            if 'feature_coarse' in out:
+                # Q4.2: supervise the coarse network too, as in the NeRF paper
+                loss = loss + torch.nn.functional.mse_loss(out['feature_coarse'], rgb_gt)
 
             if cfg.renderer.type == 'volume_sdf':
                 loss += cfg.training.eikonal_weight * get_eikonal_loss(
@@ -344,8 +367,9 @@ def train_nerf(
         lr_scheduler.step()
 
         # Checkpoint.
+        last_epoch = epoch == cfg.training.num_epochs - 1
         if (
-            epoch % cfg.training.checkpoint_interval == 0
+            (epoch % cfg.training.checkpoint_interval == 0 or last_epoch)
             and len(cfg.training.checkpoint_path) > 0
             and epoch > 0
         ):
@@ -361,7 +385,7 @@ def train_nerf(
 
         # Render
         if (
-            epoch % cfg.training.render_interval == 0
+            (epoch % cfg.training.render_interval == 0 or last_epoch)
             and epoch > 0
         ):
             with torch.no_grad():

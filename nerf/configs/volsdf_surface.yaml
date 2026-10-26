@@ -53,3 +53,5 @@ implicit_function:
   n_layers_color: 2
   n_hidden_neurons_color: 128
   append_color: []
+
+  sphere_init_radius: 1.0
